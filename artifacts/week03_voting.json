@@ -1,0 +1,12 @@
+{
+  "k": 3,
+  "hits": 17,
+  "total": 24,
+  "disagreement_ids": [],
+  "ambiguous_ids": [
+    "Q-13",
+    "Q-16",
+    "Q-18",
+    "Q-24"
+  ]
+}

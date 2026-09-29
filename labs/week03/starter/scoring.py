@@ -50,25 +50,33 @@ class RouteScore:
 # --------------------------------------------------------------------------
 
 def score_routes(results, queries) -> RouteScore:
-    """Fill in a RouteScore from the routed results.
+    s = RouteScore()
+    for routed, q in zip(results, queries):
+        s.total += 1
+        gold = q.route
+        applied = routed.applied_route
+        hit = applied == gold
 
-    `results` is a list of `Routed`, aligned with `queries`.
+        h, n = s.per_route.get(gold, [0, 0])
+        s.per_route[gold] = [h + (1 if hit else 0), n + 1]
 
-    One judgment call you have to make deliberately, and it goes in
-    DECISIONS.md. Do you score against `applied_route`, which is what the
-    system actually did, or against `decision.route`, which is what the
-    classifier wanted to do? They differ exactly when your policy fired.
+        if not hit:
+            s.confusion[(gold, applied)] += 1
 
-    Scoring the intention flatters the system, because it takes credit for
-    routes the policy overrode. Scoring what happened is what the sender
-    experienced. Pick one for the headline number and say why.
+        if routed.evidence_ok:
+            s.evidence_ok += 1
 
-    Fill in, per query: the per-route counts, the confusion pair when it is
-    wrong, whether the evidence was verbatim, which policy check fired, the
-    confidence value, and whether the query was one of the ambiguous four.
-    """
-    raise NotImplementedError("TODO 5: score the routes")
+        if routed.policy_fired:
+            s.policy_fired[routed.policy_fired] += 1
 
+        s.confidences.append(routed.decision.confidence)
+
+        if q.ambiguous:
+            s.ambiguous_total += 1
+            if hit:
+                s.ambiguous_hits += 1
+
+    return s
 
 # --------------------------------------------------------------------------
 # Given.

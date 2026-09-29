@@ -55,21 +55,42 @@ def variant_model(client) -> None:
 
 
 def variant_voting(client, k: int = 3) -> None:
-    """Variant B. Classify k times at temperature 0.7, majority wins.
+    routed_all = []
+    disagreements = []
+    for q in QUERIES:
+        decisions = []
+        for _ in range(k):
+            decision, meta = classify(client, q.text, temperature=0.7)
+            if decision is not None:
+                decisions.append(decision)
 
-    Run sequentially rather than in threads. Your endpoint answers one
-    request at a time, so a thread pool buys you nothing here, and finding
-    that out is worth more than the speedup you expected.
+        if not decisions:
+            routed = apply_policy(None, q.text)
+        else:
+            votes = [d.route for d in decisions]
+            majority_route, _ = collections.Counter(votes).most_common(1)[0]
+            if len(set(votes)) > 1:
+                disagreements.append((q.id, votes))
+            rep = next(d for d in decisions if d.route == majority_route)
+            routed = apply_policy(rep, q.text)
 
-    Score the majority result, but the number to report is not the accuracy.
-    It is the set of queries where the k votes disagreed. Print it, and put
-    it next to the list of ambiguous query ids.
+        routed_all.append(routed)
 
-    Then ask what that set is worth. Voting costs k times as much for a step
-    that was already the cheap one, so as a way to decide it is a poor buy.
-    As a way to detect something, it may be a very good one.
-    """
-    raise NotImplementedError("TODO 8: variant B, voting")
+    s = score_routes(routed_all, QUERIES)
+    print(report(s, f"voting (k={k})"))
+
+    ambiguous_ids = {q.id for q in QUERIES if q.ambiguous}
+    print(f"\ndisagreements: {len(disagreements)} of {len(QUERIES)} queries")
+    for qid, votes in disagreements:
+        flag = " (ambiguous)" if qid in ambiguous_ids else ""
+        print(f"  {qid}{flag}: {votes}")
+
+    write_json("artifacts/week03_voting.json", {
+        "k": k,
+        "hits": s.hits, "total": s.total,
+        "disagreement_ids": [qid for qid, _ in disagreements],
+        "ambiguous_ids": sorted(ambiguous_ids),
+    })
 
 
 def main() -> int:

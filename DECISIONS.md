@@ -262,3 +262,200 @@ completely invented one.
   `no_delimiter`, and `english_only` were not run, since no instructor
   assigned a specific one and time was limited — `role` was chosen as the
   fastest to implement correctly.
+
+
+
+# Week 3: a router in front of the extractor
+
+---
+
+## Week 3
+
+**Run conditions.** classifier model: qwen3:4b-instruct | answering model:
+qwen3:4b-instruct | temperature: 0.0 | served locally | date: 2026-09-29 |
+scored on: my own machine (live, not the shipped recording)
+
+### 1. The five route definitions
+
+| route     | definition, one sentence, in terms of what the help desk must do                                                                                                                                                                         |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| request   | The help desk logs a ticket and dispatches someone to act: something is broken, missing, or needed, and physical or administrative work has to happen as a result.                                                                       |
+| info      | The help desk answers from what it already knows, with no ticket opened and nobody dispatched: the reply is information, not action.                                                                                                     |
+| status    | The help desk looks up an existing, already-logged ticket and reports where it stands, without opening a new one or promising new work.                                                                                                  |
+| complaint | The help desk acknowledges dissatisfaction with the service or with how something was handled, and escalates it to a human for review, without defending the service or promising a fix itself.                                          |
+| other     | The help desk redirects, declines, or discards the message because it is not its business to act on: another department's matter, advice it is not authorized to give, spam, or an instruction aimed at the system rather than a person. |
+
+My convention for the four ambiguous queries: I adopted the convention
+already stated in `queries.py`'s `AMBIGUITY_NOTE` rather than writing my
+own — problem-plus-dissatisfaction resolves to `complaint` (the reply has
+to acknowledge the handling before anything else), a pure chase with no
+dissatisfaction resolves to `status`, and a question riding along with a
+reported fault resolves to `request` (action outranks the question). I
+adopted it because it is internally consistent and I could not find a case
+where it produced an answer I would defend differently; disagreeing for its
+own sake would have cost me a clean accuracy number for no real gain.
+
+Do my definitions match the ones in `queries.py`? Yes, deliberately — I
+paraphrased them into "what the help desk must do" form but kept the same
+boundaries, so my accuracy number measures my classifier against the
+course's convention, not against a convention of my own that would make the
+two incomparable.
+
+### 2. The policy layer
+
+Before choosing a threshold, the confidence values I saw were: min **0.0**,
+max **0.999**, **4** distinct values across 24 queries (0.0, 0.95, 0.99,
+0.999).
+
+- confidence floor: **0.5**, because the distribution above shows the model
+  reports near-total certainty (0.95-0.999) on essentially every call,
+  including the wrong ones — every one of the five real misroutes sat at
+  0.99, identical to the correct calls. No floor between 0 and 0.99 can
+  separate right from wrong here. The only informative outlier was a single
+  near-zero value (0.0, on the prompt-injection query), so the floor is set
+  just high enough to catch that kind of degenerate case without touching
+  the normal spread.
+- evidence check: when the returned span is not an exact substring of the
+  message, the policy overrides to the safe default rather than trusting
+  the route, because this is a free, inherited honesty check from week 2 —
+  a router that invents its justification is one a human cannot audit.
+- safe default: **info**, because that specialist is the only one that
+  takes no action and makes no commitment: it does not open a ticket
+  (`request`), does not promise a status or a date (`status`), does not
+  escalate to a human (`complaint`), and does not refuse or redirect a
+  possibly-legitimate message (`other`). Landing there wrongly costs an
+  unhelpful reply, nothing that needs to be undone.
+
+How often each check fired (main router run, 24 queries): low_confidence
+**1**, evidence_not_verbatim **0**, invalid_decision **0**.
+
+Two of the three checks fired zero times in this run. `invalid_decision`
+never firing tells me schema-constrained decoding did its job — every one
+of 24 calls parsed as a valid `Decision`. `evidence_not_verbatim` never
+firing in this run (though it did once in the separate voting variant, at
+temperature 0.7) tells me the model reliably copies a literal span when
+told to and constrained to `max_length=200`, at least on this corpus —
+not that the check is useless, only that this run gave it nothing to catch.
+The one check that did fire, `low_confidence`, caught exactly the anomalous
+0.0 case — and in doing so, flipped a call the classifier had gotten
+*right* (the prompt-injection query, correctly labelled `other`) into a
+recorded miss. That is a real, measured cost of the floor, not a
+hypothetical one.
+
+### 3. Route accuracy
+
+| route     | correct | of |
+| --------- | ------- | -- |
+| request   | 7       | 7  |
+| info      | 2       | 5  |
+| status    | 4       | 4  |
+| complaint | 4       | 4  |
+| other     | 1       | 4  |
+
+Overall **18/24**. Excluding the four ambiguous: **14/20**.
+
+Confusion pairs, with direction:
+
+| gold  | applied   | count |
+| ----- | --------- | ----- |
+| info  | other     | 2     |
+| other | info      | 2     |
+| info  | request   | 1     |
+| other | complaint | 1     |
+
+The route carrying most of the error is a tie in absolute count between
+`info` and `other` (3 errors sourced from each), and by fraction `other` is
+worse (3 of 4 wrong vs. 3 of 5 for `info`). But the more useful read is that
+this is not one route bleeding in a single direction — `info` and `other`
+misroute into *each other* almost symmetrically. That is a genuine boundary
+problem: "does the help desk even handle X" and "here is a question about a
+service" read as the same message shape. The fix is **a definition**, not a
+bigger model or a reworded prompt: confidence was pinned at 0.99 on these
+wrong calls too, so the model is not hesitating at the boundary, it is
+confidently applying a boundary I described ambiguously.
+
+### 4. What routing cost
+
+- monolith: **9292** tokens over 24 queries
+- router: **13641** tokens over 24 queries
+- the classifying call alone: **9241** tokens, which is **68** per cent of
+  the routed total
+
+I did not write down a prediction for that share before measuring it — an
+oversight on my part this week, and I would rather record that plainly than
+invent a number after the fact to fill the blank. What the measured 68 per
+cent does tell me: the classifier's system prompt carries the full text of
+all five route definitions plus the router instructions on every single
+call, while each specialist's prompt only carries its own paragraph — so
+the fixed cost of "knowing about all five jobs" dominates the routed
+system's budget even before it does any actual work.
+
+### 5. What routing bought
+
+One thing a specialist can be forbidden to do that the monolith cannot be
+given: the `complaint` specialist is forbidden to promise a fix or a date,
+and the `info` specialist is forbidden to invent one. Neither instruction
+can go into the monolith without also silently applying to the other four
+message kinds — you cannot tell a single prompt "never promise a date"
+without also disarming the one route (`request`) where confirming that
+work will happen is exactly the right thing to say.
+
+Would I ship the router: **no, not as it stands**. Evidence: it costs 47
+per cent more tokens and roughly double the wall-clock time of the
+monolith for two calls instead of one, 68 per cent of that extra spend is
+the classification step alone, its accuracy on the two routes where it
+actually struggles (`info`, `other`) is weak (3/9 combined) for a
+definitional reason I can name and fix, and the safety policy itself cost
+one more correct answer in this exact run. I also never scored the
+monolith's own output against the same route definitions, so I cannot
+honestly claim the router "beats" it — only that the router is measurably
+more expensive. What would change my mind: sharpening the `info`/`other`
+boundary and re-measuring, and grading a handful of monolith replies by
+hand against the same behavior definitions so there is an actual accuracy
+number to compare against, not just tokens and seconds.
+
+### 6. Stretch variant
+
+Variant assigned: **voting** (self-chosen; `model` routing would have
+required `qwen2.5:7b`, which I still have not pulled — see Deferred).
+k=3, temperature 0.7, run sequentially (the endpoint serves one request at
+a time, so a thread pool buys nothing).
+
+Result: **0 of 24** queries had any disagreement across the three votes —
+not even the four queries the course itself documents as genuinely
+ambiguous. Majority-vote accuracy came out at 17/24 (14/20 excluding the
+ambiguous four), essentially the same as the single-call router, plus one
+new `evidence_not_verbatim` trip that the deterministic run did not have.
+
+What it cost: 3x the tokens of the already-most-expensive step (the
+classification call, 68 per cent of the routed budget) run three times
+over. What it bought: nothing measurable. As a way to *decide*, voting was
+strictly worse here — more expensive, same or slightly noisier accuracy.
+As a way to *detect* disagreement, it also came back empty, which is itself
+the finding: the model is not stochastically uncertain on the queries it
+gets wrong, it is deterministically, confidently wrong on them regardless
+of sampling temperature. This matches what the confidence numbers already
+showed in section 2 — the failure mode here is a definitional gap, not a
+sampling-noise problem, so neither confidence nor voting was ever going to
+catch it.
+
+### The gold set
+
+`artifacts/goldset.json` now holds **34** cases: 10 from week 2 and 24
+added today, with the four ambiguous ones tagged `"ambiguous"` in
+`slice_tags`. Loaded from my own file (`source: "own"`), not the reference
+copy.
+
+### Deferred
+
+- `qwen2.5:7b` still not pulled - carried over from weeks 1 and 2, and this
+  week it directly determined which stretch variant I could run (`voting`
+  instead of `model` routing).
+- The `request` specialist still uses a prose stopgap prompt rather than
+  week 2's structured extractor - wiring that in is explicitly the
+  "if you finish early" task and I did not get to it this week.
+- The monolith's own accuracy was never scored against the gold labels,
+  only its token and time totals - so section 5's ship/no-ship call is
+  based on cost, not on a head-to-head accuracy comparison.
+- No prediction was recorded in advance for the routing call's token share
+  (section 4) - noted rather than backfilled.

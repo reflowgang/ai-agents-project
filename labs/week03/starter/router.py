@@ -40,22 +40,32 @@ class Routed(BaseModel):
 
 def classify(client, text: str, model: str = SMALL.name,
              temperature: float = 0.0) -> tuple[Decision | None, dict]:
-    """One cheap call whose only job is to pick a route.
-
-    Build it the same way as week 2's extractor: a schema-constrained call
-    with SYSTEM_ROUTER as the system message and `text` as the user message.
-    Return (Decision or None, meta), where meta carries seconds,
-    prompt_tokens, completion_tokens, and the raw string.
-
-    Return None rather than raising when validation fails. You need to be
-    able to count how often that happens, and an exception is not a count.
-
-    Note what this call does not get: no tools, no reference material, and
-    no instruction about how to answer. It decides and it stops. That is
-    what makes it cheap enough to be worth adding, and it is what makes its
-    output inspectable.
-    """
-    raise NotImplementedError("TODO 2: the classifying call")
+    t0 = time.perf_counter()
+    reply = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        max_tokens=200,
+        messages=[
+            {"role": "system", "content": SYSTEM_ROUTER},
+            {"role": "user", "content": text},
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "decision", "schema": Decision.model_json_schema()},
+        },
+    )
+    raw = reply.choices[0].message.content
+    meta = {
+        "seconds": time.perf_counter() - t0,
+        "prompt_tokens": reply.usage.prompt_tokens,
+        "completion_tokens": reply.usage.completion_tokens,
+        "raw": raw,
+    }
+    try:
+        decision = Decision.model_validate_json(raw)
+    except ValidationError:
+        return None, meta
+    return decision, meta
 
 
 # --------------------------------------------------------------------------
@@ -68,7 +78,7 @@ def classify(client, text: str, model: str = SMALL.name,
 # exercise exists to catch. Run the classifier over the twenty four queries
 # first, print the confidences, and then decide. On one of the two course
 # models the answer will surprise you.
-CONFIDENCE_FLOOR = None      # TODO 3a
+CONFIDENCE_FLOOR = 0.5      # TODO 3a
 
 # TODO 3b. Where does anything the policy rejects go?
 #
@@ -76,33 +86,26 @@ CONFIDENCE_FLOOR = None      # TODO 3a
 # DOES on the sender's behalf, and pick the one whose actions are easiest to
 # undo. One of the five logs a ticket, one escalates to a human, and one
 # only answers. That should decide it.
-SAFE_DEFAULT = None          # TODO 3b
+SAFE_DEFAULT = "info"          # TODO 3b
 
 
 def apply_policy(decision: Decision | None, text: str) -> Routed:
-    """Take a Decision and return what will actually happen.
+    if decision is None:
+        fallback = Decision(route=SAFE_DEFAULT, confidence=0.0, evidence="")
+        return Routed(decision=fallback, applied_route=SAFE_DEFAULT,
+                      policy_fired="invalid_decision", evidence_ok=False)
 
-    Three checks. Each one is a design decision that goes in DECISIONS.md
-    with a reason.
+    evidence_ok = bool(decision.evidence) and decision.evidence in text
+    if not evidence_ok:
+        return Routed(decision=decision, applied_route=SAFE_DEFAULT,
+                      policy_fired="evidence_not_verbatim", evidence_ok=False)
 
-    1. The call produced no valid decision at all. Rare, and it still has to
-       be handled, because the alternative is a crash on the one message
-       unusual enough to break the schema.
+    if decision.confidence < CONFIDENCE_FLOOR:
+        return Routed(decision=decision, applied_route=SAFE_DEFAULT,
+                      policy_fired="low_confidence", evidence_ok=True)
 
-    2. The evidence check, inherited from week 2 and still free. Is the
-       evidence span actually in `text`? A router that invents its
-       justification is a router you cannot audit. Note that this checks
-       honesty, not correctness: a route can be right with fabricated
-       evidence, and that is still a defect, because the evidence is what a
-       human reviewing a misroute will read.
-
-    3. The confidence floor from TODO 3a.
-
-    Set `policy_fired` to a short string naming which check fired, or leave
-    it None when the decision stood. You will count these at the checkpoint,
-    and "the policy fired sometimes" is not a count.
-    """
-    raise NotImplementedError("TODO 3: the policy layer")
+    return Routed(decision=decision, applied_route=decision.route,
+                  policy_fired=None, evidence_ok=True)
 
 
 # --------------------------------------------------------------------------

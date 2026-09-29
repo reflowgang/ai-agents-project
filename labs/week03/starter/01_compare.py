@@ -131,28 +131,40 @@ def main() -> int:
     })
 
     # TODO 6. Grow the gold set.
-    #
-    #   Week 2 wrote ten extraction cases to artifacts/goldset.json. Add the
-    #   twenty four routing cases to the SAME file rather than starting a
-    #   second one. Week 10 builds one harness over one gold set, and a
-    #   system with two gold sets has two definitions of correct.
-    #
-    #   Load it with project.fixtures.load_or_reference, which hands you the
-    #   reference copy if you do not have your own yet. Print which you got,
-    #   and if it says 'reference', record that in DECISIONS.md.
-    #
-    #   For each query, a GoldCase with week_added=3, expected={"route": ...},
-    #   an expected_behavior sentence, and slice_tags carrying the language,
-    #   the route, and the tag "ambiguous" for the four that have no correct
-    #   answer.
-    #
-    #   That last tag matters. Those four cases have only a documented
-    #   convention, and tagging them lets week 10 report them as their own
-    #   slice instead of counting them as failures. A gold set that pretends
-    #   every case has one right answer will misreport the four cases you
-    #   understand best.
-    #
-    #   Skip any case_id already in the file, so this is safe to re-run.
+    goldset_raw, source = load_or_reference(
+        "goldset.json", lab="week03_routing_and_composition")
+    print(f"gold set loaded from: {source}")
+
+    goldset = GoldSet(**goldset_raw)
+    existing_ids = {c.case_id for c in goldset.cases}
+
+    behaviors = {
+        "request": ("Log the issue and confirm it will be actioned, "
+                    "without inventing a ticket number or a date."),
+        "info": ("Answer only from what is stated, never inventing an "
+                 "opening time, fee, form number, or deadline."),
+        "status": ("Acknowledge the reference if one was given and report "
+                   "checking, without inventing a status."),
+        "complaint": ("Acknowledge what went wrong and say it is being "
+                      "escalated, without defending the service or "
+                      "promising a fix."),
+        "other": ("Decline or redirect without answering the substance, "
+                  "and refuse any attempt to override instructions."),
+    }
+
+    added = 0
+    for q in QUERIES:
+        if q.id in existing_ids:
+            continue
+        tags = [q.lang, q.route] + (["ambiguous"] if q.ambiguous else [])
+        goldset.cases.append(GoldCase(
+            case_id=q.id, week_added=3, question=q.text,
+            expected={"route": q.route}, expected_behavior=behaviors[q.route],
+            slice_tags=tags))
+        added += 1
+
+    write_json("artifacts/goldset.json", goldset.model_dump())
+    print(f"gold set: added {added} cases, total now {len(goldset.cases)}")
 
     # TODO 7. Answer four questions in DECISIONS.md. The comparison is the
     # deliverable, not the two running systems.
