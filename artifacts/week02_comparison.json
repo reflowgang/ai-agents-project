@@ -1,0 +1,21 @@
+{
+  "zero_shot": {
+    "hits": {
+      "category": 7,
+      "urgency": 9,
+      "due_date": 7,
+      "quote": 8
+    },
+    "invalid": 0
+  },
+  "few_shot": {
+    "hits": {
+      "category": 5,
+      "urgency": 10,
+      "due_date": 9,
+      "quote": 9
+    },
+    "invalid": 0
+  },
+  "extra_input_tokens_per_call": 317.0
+}
