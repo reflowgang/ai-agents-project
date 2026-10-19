@@ -1,0 +1,101 @@
+{
+  "rows": [
+    {
+      "architecture": "A baseline",
+      "green": false,
+      "tool_calls": 20,
+      "tokens": 22416,
+      "seconds": 213.4
+    },
+    {
+      "architecture": "B planner",
+      "green": false,
+      "plan_ok": true,
+      "plan_problems": [],
+      "applied": "applied",
+      "verdict": null,
+      "verdict_reason": null,
+      "fix": "booking.py: start_hour: int = 10 -> start_hour: int = 20",
+      "tokens": 959,
+      "seconds": 46.4
+    },
+    {
+      "architecture": "C planner+reviewer",
+      "green": false,
+      "plan_ok": true,
+      "plan_problems": [],
+      "applied": "not attempted",
+      "verdict": "reject",
+      "verdict_reason": "Changes the constant `start_hour` to fix a test, potentially masking an issue in the logic that calculates `total_eur`.",
+      "fix": "booking.py: start_hour: int = 10 -> start_hour: int = 20",
+      "tokens": 1823,
+      "seconds": 103.4
+    },
+    {
+      "architecture": "A baseline",
+      "green": true,
+      "tool_calls": 22,
+      "tokens": 20992,
+      "seconds": 238.1
+    },
+    {
+      "architecture": "B planner",
+      "green": false,
+      "plan_ok": true,
+      "plan_problems": [],
+      "applied": "applied",
+      "verdict": null,
+      "verdict_reason": null,
+      "fix": "booking.py: start_hour: int = 10 -> start_hour: int = 20",
+      "tokens": 957,
+      "seconds": 44.3
+    },
+    {
+      "architecture": "C planner+reviewer",
+      "green": false,
+      "plan_ok": true,
+      "plan_problems": [],
+      "applied": "not attempted",
+      "verdict": "reject",
+      "verdict_reason": "Changes the constant `start_hour` to a value not related to the failing test, which could affect other tests or logic.",
+      "fix": "booking.py: start_hour: int = 10 -> start_hour: int = 20",
+      "tokens": 1490,
+      "seconds": 55.2
+    },
+    {
+      "architecture": "A baseline",
+      "green": false,
+      "tool_calls": 8,
+      "tokens": 4927,
+      "seconds": 58.4
+    },
+    {
+      "architecture": "B planner",
+      "green": true,
+      "plan_ok": false,
+      "plan_problems": [
+        "suspect_file 'bookings.py' is not a file in the repository"
+      ],
+      "applied": "applied",
+      "verdict": null,
+      "verdict_reason": null,
+      "fix": "discounts.py: return start_hour > OFF_PEAK_FROM_HOUR -> return start_hour >= OFF_PEAK_FROM_HOUR",
+      "tokens": 1426,
+      "seconds": 77.6
+    },
+    {
+      "architecture": "C planner+reviewer",
+      "green": true,
+      "plan_ok": false,
+      "plan_problems": [
+        "suspect_file 'models.py' is not a file in the repository"
+      ],
+      "applied": "applied",
+      "verdict": "approve",
+      "verdict_reason": "The change corrects the logic to include the boundary value, matching the test expectation.",
+      "fix": "discounts.py: return start_hour > OFF_PEAK_FROM_HOUR -> return start_hour >= OFF_PEAK_FROM_HOUR",
+      "tokens": 1919,
+      "seconds": 117.9
+    }
+  ]
+}

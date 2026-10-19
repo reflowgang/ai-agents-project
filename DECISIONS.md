@@ -457,8 +457,6 @@ copy.
 - No prediction was recorded in advance for the routing call's token share
   (section 4) - noted rather than backfilled.
 
-
-
 # Week 4: a ReAct loop with two tools
 
 ---
@@ -668,3 +666,283 @@ tagged `injection`.
   restarting the Ollama app (version 0.35.0) fixed it. I did not find the root
   cause; the first attempt at the defense experiment crashed because of it and
   the final run completed after the restart.
+
+
+# Week 5: a planner, an executor, and a second agent
+
+---
+
+## Week 5
+
+**Run conditions.** model: qwen2.5:7b | framework: Pydantic AI 2.55.0 |
+output mode: `NativeOutput` for all three structured agents (the default mode
+failed, see entry 1) | runs per architecture: 3 | served locally (Ollama
+0.35.0) | temperature: not verified, it is set inside `project.models` | date:
+2026-10-12 | table from: my own live runs; the course's recording is shown next
+to it | homework Task B: 2 runs per architecture, run on 2026-10-13
+
+### 1. The plan schema
+
+What I tried first, and what happened:
+
+I shipped the flat schema from the start and it failed. With Pydantic AI's
+default output mode, `Plan(goal: str, steps: list[str], suspect_file: str)`
+raised `Exceeded maximum output retries (3)` every time, on 2.55.0 and also on
+2.27.0 (the lower bound in `requirements.txt`). I stripped it down to a bare
+three-field model with no `Field` descriptions and no system prompt, and it
+still failed. Looking at the messages the library kept, the model never made a
+tool call: it answered in plain prose and the library tried to parse that text
+as JSON and got `json_invalid` three times. A plain text request to the same
+model worked. I did not find the cause. What differs from the course setup that
+I know of: Pydantic AI 2.55.0 (2.27.0 failed the same way), `openai` 3.29.0
+(upgraded by the install, not tested lower), Ollama 0.35.0.
+
+Then I tried the nested version, a list of `Step(tool, argument, why)` objects.
+In default mode it failed with the same error as the flat schema. With
+`NativeOutput` (constrained decoding through `response_format`) it succeeded on
+the first try (one run). So I did not reproduce "nested fails, flat works":
+in my setup the output mode decided it, not the shape of the schema. Each
+variant was tried once or twice, so I would not call this a finding about schema
+complexity either way.
+
+What I shipped, and why it is shaped that way:
+
+`Plan(goal: str, steps: list[str], suspect_file: str)`, flat, with
+`output_type=NativeOutput(Plan)`. Flat because it is the shallowest shape that
+carries what a person reading the plan needs, and the course reports that the
+nested one fails; I could not confirm that. `NativeOutput` because it is the
+only mode that worked here. This is a deviation from the course's recording,
+which used the default mode, so my table is not like-for-like with the
+recording on this point. `PromptedOutput` also worked in one try and I did not
+use it.
+
+### 2. The validator
+
+| check                                                       | what it catches                                                                                                                                            |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| step count between 2 and 6                                  | a plan too thin to be a plan or too long to read; the range is the one the planner prompt asks for. Never fired in my runs.                                |
+| `suspect_file` is one of the four files in the repository | invented file names. Seen in my runs:`bookings.py`, `models.py` (final run), and earlier `models/booking.py`, `booking_discounts.py`.              |
+| some step runs the tests                                    | a plan with no verification step. Fired on 2 of the 3 first-attempt failures in the final run.                                                             |
+| no step proposes editing a test                             | never fired on a real plan; I only showed it failing on a hand-written bad plan (one step "Edit tests/test_pricing.py ..."), which failed all four checks. |
+
+On a failed check my system repairs once: the planner is called again with the
+list of problems. If the second plan also fails, it carries on anyway, records
+`plan_ok: False`, and, when the suspect file does not exist, falls back to
+`discounts.py`. I chose repair-once rather than refuse. The fallback is code
+from the starter that I decided to keep; it hard-codes the file that holds the
+bug, which the real system would not know, and entry 3 shows what it did to my
+numbers.
+
+In the final run 3 of the 6 plans failed their first validation. The repair
+fixed one. In the other two it did not: the invented file name stayed invalid
+(`bookings.py` in B, `models.py` in C). The checks are keyword matching on free
+text and have false positives and negatives; none of them can tell a real file
+from the right file, and that is exactly the failure that mattered.
+
+### 3. The three-way table
+
+My runs (3 per architecture, live):
+
+| architecture         | green | tokens (mean) | seconds (mean) |
+| -------------------- | ----- | ------------- | -------------- |
+| A baseline           | 1/3   | 16111         | 170.0          |
+| B planner            | 1/3   | 1114          | 56.1           |
+| C planner + reviewer | 1/3   | 1744          | 92.2           |
+
+The course's recording (qwen2.5:7b, Pydantic AI, 2026-08-11, another machine):
+
+| architecture         | green | tokens (mean) | seconds (mean) |
+| -------------------- | ----- | ------------- | -------------- |
+| A baseline           | 0/3   | 10470         | 40.1           |
+| B planner            | 2/3   | 1751          | 15.0           |
+| C planner + reviewer | 0/3   | 3441          | 29.0           |
+
+Seconds are not comparable across the two tables (different hardware). Green
+counts of 1/3 each cannot be told apart from each other on 3 runs. The
+difference that is large enough to trust is cost: baseline used about 14.5
+times the tokens of B and about 3 times the time.
+
+The two greens in B and C are not what they look like. In both, the plan was
+still invalid after the repair, the fallback replaced the file with
+`discounts.py`, and the fixer then made the correct one-line change. In the
+other four B and C runs the planner pointed at `booking.py` (a real file, the
+wrong one; inferred from the fixer's edit landing there, I did not print the
+plan's `suspect_file`) and the fixer changed a default value
+(`start_hour: int = 10` to `20`), which left the suite red. So of the 6 final
+plans, none named `discounts.py` on its own. I did not run B and C with the
+fallback removed, so I cannot give a number for what they would have scored.
+
+Which of the three I would ship: B, on cost alone, since its green count (1/3)
+equals A's and C's at about one fourteenth of A's tokens. I hold that loosely:
+B's only green came through the fallback, and three runs cannot separate 1/3
+from 2/3. What would change my mind: the planner naming `discounts.py` unaided
+in most runs once it is shown the file list (then B is better than it looks),
+or a baseline that goes green in most of a larger set of runs at a cost I can
+accept (then the extra structure is not buying anything).
+
+### 4. Why the baseline fails
+
+It did not fail every time: 1 green of 3, with 20, 22 and 8 tool calls (the
+recording shows 10, 14 and 18 calls and no success). The 22-call run was the
+green one. I did not read what the two red runs did, so I can say how many calls
+they made and not why they ended red.
+
+What changed between A and B is neither the model (qwen2.5:7b throughout) nor
+the system prompt (both say: fix the bug, never touch tests). It is the size of
+the action space. A can call four tools in any order, as many times as it
+likes, and has to find the bug and make the edit itself. B gets one structured
+proposal, and `apply_fix` (not the model) decides whether it is applied. That
+is where B's 14.5 times lower token cost and 3 times lower time come from. B
+did not buy more correct answers in my runs, and its one success needed the
+fallback.
+
+### 5. The reviewer
+
+Verdicts across my runs: 1 approve, 2 reject (3 C runs).
+
+The two rejections were of the `booking.py` default-value change; in B the same
+change was applied and left the suite red, so the reviewer was right both times
+and also changed nothing: C and B both ended at 1/3. The approval was of the
+correct one-line fix in `discounts.py`, with the reason "corrects the logic to
+include the boundary value". The rejection reasons talk about "changing a
+constant", which is the wording of my own reviewer prompt, so they are partly
+an echo of the instructions and not independent evidence. The recording's
+reviewer, with the course's prompt, rejected the correct fix every time; mine
+did not, but the prompts differ, so I do not compare them.
+
+Would I ship it: no, not on this evidence. Extra cost per run: 630 tokens
+(+57%) and 36.1 seconds (+64%), for no change in how many runs ended green.
+
+The case where it would earn its cost: a change that turns the suite green and
+is still wrong. Entry 6 shows I can construct one. None of my 3 runs produced
+such a change, so whether the reviewer catches it is untested by my data.
+
+### 6. What my verifier cannot catch
+
+The test suite is free, fast and deterministic, and it passes changes it
+should not. I measured two.
+
+First, changing `OFF_PEAK_FROM_HOUR = 20` to `19` and leaving the comparison as
+`>`: all 16 tests pass. For whole-number hours that is behaviourally the same
+as the correct fix (`> 19` and `>= 20` agree), so it is not wrong in the way
+the course's description of this trap says (that it hands 19:00 the discount).
+It is wrong because the bug is still in the code and the constant now says 19
+for a rule that says 20: the next person who fixes the comparison or reuses
+the constant gives 19:00 the discount.
+
+Second, the correct fix. The rule "20:00 or later" is written in three places:
+`discounts.py` (the bug the failing test covers), `pricing.py:42` (`if booking.start_hour > 20:`, the same bug, next to `parts.append("off peak 20%")`),
+and `report.py:22` (`>= 20`, correct). The fix in `discounts.py` alone turns
+all 16 tests green while `pricing.py:42` still has the bug. No test covers it.
+Green means "fixed what a test looks at", not "fixed". I have not read the
+code around `pricing.py:42`, so I do not know what exactly goes wrong there.
+
+Week 10 has to grade the change, not only the suite, and for the second case
+that means a judge that sees all three places.
+
+### The gold set
+
+`artifacts/goldset.json` now holds **46** cases: the 44 from before and two
+added today, `W5-bugfix` and `W5-constant-trap`. After measuring entry 6 I
+rewrote the `expected_behavior` of `W5-constant-trap`: the starter text says
+the 19 change "gives the discount to bookings at 19:00", which is not true for
+this code.
+
+### Homework: Task B, the refactoring
+
+**Setup.** Task B has no failing test to follow. I ran it on a scratch copy
+with the 20:00 bug already fixed (16 of 16 green at the start), so a green
+suite cannot tell a finished refactoring from an untouched repository. I wrote
+a four-part check, and a run counts as done only when all four hold: the 16
+tests pass; no rate is written by hand outside the constant definitions (a
+regex, so it would miss `10 / 100`); each of the four constants is defined once
+and used in all three modules; and `total_eur`, `discount_summary` and
+`confirmation_line` give identical output to the starting repository on 768
+bookings. The last one means "same as before, including the existing
+`pricing.py:42 > 20` bug", so a refactoring that also fixed that copy would
+count as a change. I checked the check without a model on three hand-made
+cases and it behaved as expected on both machines: untouched (12 rates left,
+not done), correct refactoring in 14 edits (done), and the same refactoring
+with the wrong constant in `pricing.discount_summary` (all 16 tests green, no
+hand-written rate left, outputs differ). The third case matters for entry 6:
+no test calls `discount_summary`.
+
+**Differences from the bug-fix comparison.** New prompts for the baseline, the
+fixer and the reviewer (the week 5 ones are about a failing test, and the
+reviewer would reject every refactoring edit). The baseline got one extra tool,
+`find_hardcoded_rates`, because its test tool says nothing when the suite
+starts green. B and C work in up to 20 rounds of one edit each (the job needs
+at least 14), each round shown all three source files and the list of rates
+still written by hand, so the planner's `suspect_file` has no effect here. In C
+a rejected edit is not applied and the fixer is told why. I put the hint
+`f"{RESIDENT_RATE:.0%}"` in the task text before any run. Two runs per
+architecture, not three: I interrupted the third run of A after about 2.5
+hours; it left no record.
+
+**Results** (my own live runs, 2 per architecture, 2026-10-19):
+
+|                                             | A baseline | B planner         | C planner+reviewer |
+| ------------------------------------------- | ---------- | ----------------- | ------------------ |
+| done                                        | 0/2        | 0/2               | 0/2                |
+| tests green at the end                      | 2/2        | 0/2               | 0/2                |
+| outputs unchanged                           | 2/2        | 0/2               | 0/2                |
+| rates still written by hand (start: 12)     | 12, 12     | 1, 2              | 6, 5               |
+| edits applied / refused / rejected, per run | n/a        | 11/9/0 and 13/7/0 | 6/5/9 and 7/2/11   |
+| tokens (mean)                               | 2666       | 41782             | 50394              |
+| seconds (mean)                              | 92         | 1003              | 3396               |
+
+**What I can say.** Nothing finished the job, so the gap between architectures
+did not widen in the number of successes (0 of 2 each). It widened in what they
+leave behind. A left the repository exactly as it was: run 1 made 4 tool calls
+and replaced no rate, run 2 made 0 tool calls and stopped after 592 tokens and
+15 seconds. B and C did change the code, and all 4 of their runs ended with
+failing tests and different output, which is a worse state than not touching
+it. B got closest (1 and 2 rates left). In all 4 B and C runs the first plan
+failed validation ("no step runs the tests") and the single repair fixed it.
+
+The reviewer rejected 9 and 11 of 20 proposals and the code still ended broken.
+C used about 1.2 times B's tokens and 3.4 times its time, with more rates left.
+In run 2 it rejected the same line (`return min(total, 0.30)`) five rounds in a
+row before applying it. I did not store its reasons, so I cannot say whether it
+rejected good edits or bad ones. On 2 runs this is a hint, not a result.
+
+**Why the tests went red: not established.** In the edits I printed for B and
+C, none targets a `from ... import` line. Without the import, a constant used
+in `pricing.py` or `report.py` raises `NameError`, and applying my correct
+refactoring minus its two import edits reproduces exactly that (I ran it on a
+copy). That fits, but I did not store the `new_line` of the agents' edits and
+the scratch copies are deleted, so it stays a hypothesis.
+
+**Which of the three I would ship for this task:** none. A at least breaks
+nothing, but it does not do the job either.
+
+### Deferred
+
+- Cause of the default-mode failure not found (entry 1). Tested: Pydantic AI
+  2.27.0 and 2.55.0. Not tested: other `openai` versions, other Ollama
+  versions.
+- The install of `pydantic-ai-slim` upgraded `openai` from 3.14.1 to 3.29.0. I
+  have not re-run weeks 1 to 4 on it.
+- I did not read the baseline's transcripts, so entry 4 explains the cost and
+  not the two failures.
+- I did not run B and C without the `discounts.py` fallback.
+- `traces.jsonl` grew by 16 records this week (286 to 302). The reported run
+  accounts for 9; the other 7 (by my count, not read from the file) come from
+  two incomplete attempts: one that crashed because I had deleted the `goal`
+  field from `Plan`, and one I interrupted. Case ids therefore repeat
+  (`A-baseline-run1` and so on). I did not delete them; the table above comes
+  from the last complete run.
+- The planner is never shown the file names or the failing test output, only
+  the task text, so its invented file names (entry 2) and the 0 of 6 correct
+  files (entry 3) say more about what it was given than about its ability to
+  find a bug. I did not test a version that is shown them.
+- Reviewer on a deliberately bad patch (the "if you finish early" task) and the
+  "tell the fixer the constant is suspect" experiment: not done.
+- Task B: 2 runs per architecture, not 3; the interrupted run left no record.
+  `traces.jsonl` grew from 302 to 308 records.
+- The cause of the red tests in Task B (missing imports) is a hypothesis; the
+  agents' `new_line`, the text of each `apply_fix` refusal and the reviewer's
+  reasons were not recorded.
+- I did not read why A made 0 tool calls in Task B run 2.
+- The 768-booking comparison treats the existing `pricing.py:42` bug as
+  correct behaviour.
