@@ -1,0 +1,39 @@
+{
+  "facts": [
+    {
+      "subject": "A. Muller",
+      "kind": "preference",
+      "text": "prefers letters in French",
+      "handle": "fact-5f6df896032d",
+      "written_at": "2026-10-21T16:26:47Z"
+    },
+    {
+      "subject": "A. Muller",
+      "kind": "preference",
+      "text": "prefers letters in French",
+      "handle": "fact-6e8ceb6acee9",
+      "written_at": "2026-10-21T16:26:48Z"
+    },
+    {
+      "subject": "A. Muller",
+      "kind": "preference",
+      "text": "prefers letters in French",
+      "handle": "fact-179ee742d6dc",
+      "written_at": "2026-10-25T19:56:38Z"
+    }
+  ],
+  "cases": {
+    "case-b7f597bfe2f4": {
+      "subject": "A. Muller",
+      "owner": null
+    },
+    "case-dd7f8d2b39a0": {
+      "subject": "A. Muller",
+      "owner": null
+    },
+    "case-f48d29d97995": {
+      "subject": "A. Muller",
+      "owner": "desk-agent-1"
+    }
+  }
+}

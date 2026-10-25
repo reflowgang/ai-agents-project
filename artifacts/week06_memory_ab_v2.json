@@ -1,0 +1,67 @@
+{
+  "model": "qwen2.5:7b",
+  "runs_per_condition": 3,
+  "tag": "v2",
+  "rows": [
+    {
+      "condition": "memory on",
+      "run": 1,
+      "turns": 2,
+      "tokens": 819,
+      "asked": 0,
+      "recalled": 1,
+      "empty_recalls": 0,
+      "queries": [
+        "A. Muller | booking_confirmation"
+      ],
+      "reply": "Votre réservation pour la salle principale, le samedi à 20:00 pour deux heures est confirmée. En tant que membre d'un club de sport, vous benefitez d'un rabais de 15 %.",
+      "raised": null,
+      "seconds": 35.2,
+      "french": true,
+      "discount": true,
+      "tool_call_as_text": false,
+      "success": true
+    },
+    {
+      "condition": "memory on",
+      "run": 2,
+      "turns": 2,
+      "tokens": 831,
+      "asked": 0,
+      "recalled": 1,
+      "empty_recalls": 0,
+      "queries": [
+        "A. Muller | booking confirmation"
+      ],
+      "reply": "Monsieur Muller, votre réservation au grand hall se situe le samedi à 20:00 pour une durée de 2 heures. En tant que membre d'un club, vous bénéficiez d'un rappatriement de 15 %. Veuillez confirmer.",
+      "raised": null,
+      "seconds": 11.6,
+      "french": true,
+      "discount": true,
+      "tool_call_as_text": false,
+      "success": true
+    },
+    {
+      "condition": "memory on",
+      "run": 3,
+      "turns": 5,
+      "tokens": 2686,
+      "asked": 0,
+      "recalled": 4,
+      "empty_recalls": 0,
+      "queries": [
+        "A. Muller | preferred_language",
+        "A. Muller | discounted_rate",
+        "A. Muller | discounted_rate",
+        "A. Muller | discounted_rate"
+      ],
+      "reply": "A. Muller, membre d'un club de sports inscrit, a réservé l'hall principal le samedi à 20:00 pour 2 heures. Le tarif a été réduit de 15 % en vertu de votre adhésion à un club. Votre réservation est con",
+      "raised": null,
+      "seconds": 62.3,
+      "french": true,
+      "discount": true,
+      "tool_call_as_text": false,
+      "success": true
+    }
+  ]
+}

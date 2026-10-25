@@ -1,0 +1,158 @@
+{
+  "model": "qwen2.5:7b",
+  "runs_per_condition": 3,
+  "cost": {
+    "tokens": [
+      {
+        "k": 0,
+        "prompt_tokens": 36,
+        "added": 0
+      },
+      {
+        "k": 1,
+        "prompt_tokens": 67,
+        "added": 31
+      },
+      {
+        "k": 3,
+        "prompt_tokens": 115,
+        "added": 79
+      },
+      {
+        "k": 10,
+        "prompt_tokens": 285,
+        "added": 249
+      }
+    ],
+    "synthetic": [
+      {
+        "facts": 10,
+        "target_written": "last",
+        "target_rank": 3,
+        "in_top_3": true,
+        "search_ms": 3.47
+      },
+      {
+        "facts": 10,
+        "target_written": "first",
+        "target_rank": 6,
+        "in_top_3": false,
+        "search_ms": 0.05
+      },
+      {
+        "facts": 50,
+        "target_written": "last",
+        "target_rank": 11,
+        "in_top_3": false,
+        "search_ms": 0.24
+      },
+      {
+        "facts": 50,
+        "target_written": "first",
+        "target_rank": 25,
+        "in_top_3": false,
+        "search_ms": 0.24
+      },
+      {
+        "facts": 400,
+        "target_written": "last",
+        "target_rank": 87,
+        "in_top_3": false,
+        "search_ms": 1.0
+      },
+      {
+        "facts": 400,
+        "target_written": "first",
+        "target_rank": 241,
+        "in_top_3": false,
+        "search_ms": 1.04
+      }
+    ]
+  },
+  "rows": [
+    {
+      "condition": "memory off",
+      "run": 1,
+      "turns": 1,
+      "tokens": 272,
+      "asked": 0,
+      "recalled": 0,
+      "reply": "{\"name\": \"ask_resident\", \"arguments\": {\"question\": \"What is your preferred language for the confirmation, and are you a club member?\"}}",
+      "raised": null,
+      "seconds": 8.9,
+      "french": true,
+      "discount": false,
+      "success": false
+    },
+    {
+      "condition": "memory on",
+      "run": 1,
+      "turns": 8,
+      "tokens": 4234,
+      "asked": 0,
+      "recalled": 7,
+      "reply": "I recalled A. Muller's details, but no information was found. Let's proceed by assuming A. Muller prefers German and is not a club member. \n\nBookings confirmed: A. Muller wird den Hauptsaal am Samstag",
+      "raised": null,
+      "seconds": 48.4,
+      "french": true,
+      "discount": false,
+      "success": false
+    },
+    {
+      "condition": "memory off",
+      "run": 2,
+      "turns": 3,
+      "tokens": 1010,
+      "asked": 2,
+      "recalled": 0,
+      "reply": "Mесьсieur Muller, vous avez réserver la salle principale le samedi à 20:00 pour une durée de 2 heures. Un réduction de 15% a été appliquée en vertu de votre adhésion à un club. Votre réservation est c",
+      "raised": null,
+      "seconds": 52.2,
+      "french": true,
+      "discount": true,
+      "success": true
+    },
+    {
+      "condition": "memory on",
+      "run": 2,
+      "turns": 5,
+      "tokens": 2281,
+      "asked": 0,
+      "recalled": 4,
+      "reply": "在线咨询中未找到A. Muller之前的预订确认信息。问一下A. Muller预订的俱乐部是否提供折扣以及语言偏好。\n\n",
+      "raised": null,
+      "seconds": 36.6,
+      "french": false,
+      "discount": false,
+      "success": false
+    },
+    {
+      "condition": "memory off",
+      "run": 3,
+      "turns": 2,
+      "tokens": 602,
+      "asked": 1,
+      "recalled": 0,
+      "reply": "Mlle Müller a réservé la salle principale le samedi à 20:00 pour 2 heures. Un rabais pour son club lui a été appliqué (15 % de réduction).",
+      "raised": null,
+      "seconds": 13.1,
+      "french": true,
+      "discount": true,
+      "success": true
+    },
+    {
+      "condition": "memory on",
+      "run": 3,
+      "turns": 5,
+      "tokens": 2485,
+      "asked": 1,
+      "recalled": 3,
+      "reply": "D'accord, pour A. Muller, club membre, voici votre confirmation :\n\nReservasie voor de hoofdzal, zaterdag om 20:00, durende 2 uur. U heeft recht op een korting van 15% door lid van een gerijkte sportve",
+      "raised": null,
+      "seconds": 46.3,
+      "french": true,
+      "discount": true,
+      "success": true
+    }
+  ]
+}
