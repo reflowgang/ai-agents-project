@@ -960,6 +960,7 @@ Ollama, served locally | framework for the A/B: Pydantic AI 2.55.0 |
 temperature: not verified, it is set inside `project.models` | date:
 2026-10-21 | A/B: 3 runs per condition | homework run on 2026-10-20
 
+
 ### 1. The handle
 
 Format I chose: `fact-` or `case-` followed by 12 random hex characters from
@@ -1214,3 +1215,194 @@ fallback are both inside `MemoryStore.search`, so week 7 replaces one body.
   clear it.
 - Running `02_stateless.py` with both servers in session mode (the "if you
   finish early" exercise): not done on my machine.
+
+
+
+
+# Week 7: a RAG pipeline you can score
+
+---
+
+## Week 7
+
+**Run conditions.** embedding model: `nomic-embed-text:latest` | dimensionality:
+768 | chunk size: 600 | overlap: 80 | k: 5 | store: Chroma 1.5.9 (in memory) |
+date: 2026-10-27 | table from: my own live index | chunk
+sweep: 300/40, 600/80, 1200/120, one run each, same day
+
+### 1. The chunker
+
+size 600, overlap 80, because it is the course's default and my own sweep gave
+no measured reason to move off it: dense retrieval ranked the gold chunk first
+on the same 10 of 11 questions at 300, 600 and 1200 (entry 3), so the sweep
+could not tell the three sizes apart. I did not choose 600 because it won.
+
+What the chunker does: it cuts inside each section (never across two), with a
+stride of `size - overlap`, prepends the section heading to every chunk's text,
+and gives each chunk an id of the form `RB-VIGNETTE::Fees::0` (document,
+section, position in the section), so the gold set, which names sections, scores
+any size. One thing it does not do: the last chunk of a section can lie mostly
+inside the overlap of the one before it; I did not remove those tails, and it is
+what gives 95 chunks at 600/80, the same count as the course's recording.
+
+The keyword retriever is term overlap: words of three letters or more, a
+hyphenated token such as `RB-1140b` kept whole, every word weighted the same, no
+stop-word list, ties broken by chunk id. Those choices matter for entries 3, 5
+and 6.
+
+### 2. The index
+
+95 chunks, 768 dimensions, **4.4 seconds** for one full indexing run (embedding
+plus indexing; 600/80, one run). The 300 and 1200 runs took 2.9 s (157 chunks)
+and 1.8 s (57 chunks). The first number is not comparable with the other two as
+a scaling figure: it was my first run of the session and probably included
+loading the embedding model into Ollama's memory (not checked).
+
+### 3. The table
+
+Own live run, 600/80, k = 5. Dense recall@5 is shown; keyword rank is there for
+comparison.
+
+| qid | dense rank | keyword rank | recall@5 (dense) | tags                   |
+| --- | ---------- | ------------ | ---------------- | ---------------------- |
+| Q01 | 1          | 3            | 1.00             | distractor, superseded |
+| Q02 | 1          | 14           | 1.00             | rare-token             |
+| Q03 | 1          | 1            | 1.00             | easy                   |
+| Q04 | 1          | 1            | 1.00             | vocabulary             |
+| Q05 | 22         | 17           | 0.00             | multi-document         |
+| Q06 | 1          | 5            | 1.00             | negation               |
+| Q07 | 1          | 3            | 1.00             | easy                   |
+| Q08 | 1          | 1            | 1.00             | numeric                |
+| Q09 | 1          | 2            | 1.00             | distractor             |
+| Q10 | 1          | 1            | 1.00             | easy                   |
+| Q11 | 1          | 12           | 1.00             | easy                   |
+| Q12 | not scored |              |                  | unanswerable           |
+
+Q12 has no gold section, so it is not scored on retrieval; whether the system
+can say "I do not know" is not tested this week, because there is no generation.
+Dense: gold chunk in the top 5 on 10 of 11 questions. Dense is ahead of keyword
+on 6, keyword ahead on 1 (Q05, and both are far outside the top 5).
+
+My ranks for all 11 answerable questions, dense and keyword, are identical to the
+course's recording (2026-08-11). That is expected with the same model and the
+same chunking, and it says that my code reproduces the course's reference; it
+does not say the pipeline is good.
+
+**Chunk sweep, by question** (rank of the first gold chunk, dense / keyword):
+
+| qid | 300/40 (157 chunks) | 600/80 (95) | 1200/120 (57) |
+| --- | ------------------- | ----------- | ------------- |
+| Q01 | 1 / 3               | 1 / 3       | 1 / 4         |
+| Q02 | 1 / 15              | 1 / 14      | 1 / 4         |
+| Q03 | 1 / 1               | 1 / 1       | 1 / 2         |
+| Q04 | 1 / 1               | 1 / 1       | 1 / 1         |
+| Q05 | 30 / 44             | 22 / 17     | 20 / 13       |
+| Q06 | 1 / 5               | 1 / 5       | 1 / 1         |
+| Q07 | 1 / 2               | 1 / 3       | 1 / 2         |
+| Q08 | 1 / 1               | 1 / 1       | 1 / 1         |
+| Q09 | 1 / 2               | 1 / 2       | 1 / 4         |
+| Q10 | 1 / 1               | 1 / 1       | 1 / 1         |
+| Q11 | 1 / 14              | 1 / 12      | 1 / 14        |
+
+Which questions moved. Dense: only Q05 (30, 22, 20); the other ten are at rank 1
+at all three sizes, and recall@5 for Q05 is 0.00 at all three. Keyword: Q02
+(15, 14, 4), Q05 (44, 17, 13), Q06 (5, 5, 1), Q01, Q03 and Q09 (a place or two
+worse at 1200), Q07 and Q11 (differ at 600 only). Q04, Q08 and Q10 did not move.
+Be careful with the keyword movement: the larger the chunk, the fewer chunks
+there are (157, 95, 57), so a rank can only be smaller by arithmetic. Q02
+improving from 14 to 4 is partly that and I did not separate the two effects.
+One run per size.
+
+### 4. Good pipeline, or easy task?
+
+The task is easy: a crude word counter puts the gold section in its top 5 on 8
+of 11 questions at 600/80, and dense retrieval puts it first on the same ten
+questions at all three chunk sizes, so rank one on 10 of 11 cannot separate a
+good pipeline from a bad one, or one chunk size from another. It is a metric
+that has run out of range on this corpus.
+
+### 5. The question that fails on both
+
+Question: Q05, "I have just moved to Remerbaach and I own a car. What do I have
+to do at the commune?" Dense rank 22, keyword rank 17 (600/80); recall@5 is 0.00
+at all three sizes.
+
+Why it fails:
+
+The gold answer is two sections in two documents, `RB-ARRIVEE::Deadline` and
+`RB-VIGNETTE::How to apply`. One query is one vector, and each half of the
+question is only a half. What I observed at 600/80: dense's top 5 holds no chunk
+of the vignette document at all; it has two chunks of the arrival document, but
+the wrong sections (`Who must declare`, `(intro)`), and three general commune
+pages (`TRANSPORT` twice, `HIVER`). And the question's own words do not appear in
+the gold sections: "moved" and "car" are "take up residence" and "vehicle" in the
+text (I checked the two documents), so there is little for a word counter to
+catch either, and keyword search does no better in any useful sense (rank 17, 44
+and 13, all outside the top 5). My guess is that "Remerbaach" and "commune" pull the query towards
+pages about the commune in general; that is a guess, I did not test the question
+without those words.
+
+Would any chunk size fix it? No, and the sweep agrees: dense rank 30, 22 and 20
+at 300, 600 and 1200, never close to the top 5, and keyword 44, 17 and 13. The
+reason is structural, not tuning: my chunker never joins two sections, so no size
+can put both gold sections in one chunk. A bigger chunk only moves one of them a
+little closer. The fix has to be on the question side (splitting it in two
+questions, retrieving for each and merging; the "if you finish early" exercise,
+not done) and not on the chunk side.
+
+### 6. The gold-set correction
+
+The note said: Q02's string `RB-1140b` is "rare, exact, and semantically empty,
+so dense retrieval is the wrong tool for it and keyword search is the right one."
+
+My measurement said: dense ranked the gold chunk 1st; term overlap ranked it
+14th at 600/80 (15th at 300, 4th at 1200), and dense was 1st at all three sizes.
+The claim is not supported by my data. The token is found, because it is in the
+gold chunk and in the `Visitors` chunk. What goes wrong is that my keyword scorer
+weights `RB-1140b` exactly like "for" and "what", so 15 chunks sharing two words
+with the query tie, and the gold chunk lands in 14th place by the alphabetical
+tie-break on chunk id; the rank is partly an accident of ordering. The superseded
+page carries `RB-1140a`, a different token, so it does not match at all.
+
+One thing that does keep the original idea alive, and that I would not drop:
+at 600/80 dense put the superseded page's `How to apply` chunk second, right
+behind the gold chunk. It does not tell `RB-1140b` from `RB-1140a`. It was
+right here, and the old page is the one that would be wrong in an answer.
+
+The corrected note (now in `goldset.py`):
+
+> The query carries the string RB-1140b, rare and exact. The original note said
+> dense retrieval is the wrong tool for it and keyword search the right one.
+> Measured 2026-11-02 (nomic-embed-text:latest, 768 dimensions, chunks of 600
+> with overlap 80, week 7 term-overlap scorer): dense ranked the gold chunk 1st,
+> term overlap ranked it 14th, inside a tie of 15 chunks that share two query
+> words. So the claim is not supported here. The token IS found: it is in the
+> gold chunk and in the Visitors chunk. The scorer gives it the same weight as
+> 'for' and 'what', and breaks ties by chunk id, so the 14th place is partly an
+> accident of ordering. The superseded page carries RB-1140a, a different token,
+> so it does not match. Not tested: a scorer that weights rare terms (BM25),
+> another embedding model, other rare tokens.
+
+What it cost me: one table and one look at what the scorer was counting. What it
+would have cost to not find it: a hybrid-retrieval exercise built on the
+assumption that keyword search rescues rare tokens, which my scorer does not do.
+
+### Deferred
+
+- Wiring the retriever into `MemoryStore.search` (the homework and the
+  application assembly): not done yet. The week 6 keyword `search` is still in
+  place.
+- The chunk sweep is one run per size and one embedding model. No BM25 or any
+  scorer that weights rare words; the keyword ranks above are for my crude
+  counter, with ties broken by chunk id.
+- Q05's top 5 was read at 600/80 only; its explanation partly rests on reading
+  the corpus and one guess ("Remerbaach" and "commune"), which I did not test.
+- Splitting Q05 into two questions: not done.
+- The "ties dense retrieval" exercise: not done.
+- Index times are single runs, and the first one probably includes model
+  loading (not checked).
+- Running `01_retrieve.py` overwrites `artifacts/week07_retrieval.json`. I kept
+  copies for each size (`_s300`, `_s600`, `_s1200`); the plain file is the 1200
+  run.
+- The corpus is synthetic; no number or deadline in it is a fact about
+  Luxembourg.
