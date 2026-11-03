@@ -1,0 +1,247 @@
+[
+  {
+    "name": "attempt",
+    "span_id": "26cee74fb655c4f0",
+    "parent": "57e88a300089b060",
+    "ms": 1.25,
+    "attributes": {
+      "n": 1,
+      "error.type": "ToolTimeout",
+      "error.message": "search timed out"
+    },
+    "events": [
+      {
+        "name": "exception",
+        "attributes": {
+          "exception.type": "faults.ToolTimeout",
+          "exception.message": "search timed out",
+          "exception.stacktrace": "Traceback (most recent call last):\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/retry.py\", line 139, in attempt\n    value = call(*args, **kwargs)\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/tools.py\", line 31, in search\n    return plan.apply(\"search\", [hit] if hit else [])\n           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/faults.py\", line 95, in apply\n    raise ToolTimeout(f\"{tool} timed out\")\nfaults.ToolTimeout: search timed out\n",
+          "exception.escaped": "False"
+        }
+      }
+    ]
+  },
+  {
+    "name": "attempt",
+    "span_id": "5f1c31b5f2ca58e7",
+    "parent": "57e88a300089b060",
+    "ms": 0.4,
+    "attributes": {
+      "n": 2,
+      "error.type": "ToolTimeout",
+      "error.message": "search timed out"
+    },
+    "events": [
+      {
+        "name": "exception",
+        "attributes": {
+          "exception.type": "faults.ToolTimeout",
+          "exception.message": "search timed out",
+          "exception.stacktrace": "Traceback (most recent call last):\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/retry.py\", line 139, in attempt\n    value = call(*args, **kwargs)\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/tools.py\", line 31, in search\n    return plan.apply(\"search\", [hit] if hit else [])\n           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/faults.py\", line 95, in apply\n    raise ToolTimeout(f\"{tool} timed out\")\nfaults.ToolTimeout: search timed out\n",
+          "exception.escaped": "False"
+        }
+      }
+    ]
+  },
+  {
+    "name": "attempt",
+    "span_id": "3eefd02cf395b02d",
+    "parent": "57e88a300089b060",
+    "ms": 0.58,
+    "attributes": {
+      "n": 3,
+      "error.type": "ToolTimeout",
+      "error.message": "search timed out"
+    },
+    "events": [
+      {
+        "name": "exception",
+        "attributes": {
+          "exception.type": "faults.ToolTimeout",
+          "exception.message": "search timed out",
+          "exception.stacktrace": "Traceback (most recent call last):\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/retry.py\", line 139, in attempt\n    value = call(*args, **kwargs)\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/tools.py\", line 31, in search\n    return plan.apply(\"search\", [hit] if hit else [])\n           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/faults.py\", line 95, in apply\n    raise ToolTimeout(f\"{tool} timed out\")\nfaults.ToolTimeout: search timed out\n",
+          "exception.escaped": "False"
+        }
+      }
+    ]
+  },
+  {
+    "name": "fallback",
+    "span_id": "06ef78583743bde2",
+    "parent": "57e88a300089b060",
+    "ms": 0.01,
+    "attributes": {
+      "n": 0
+    },
+    "events": []
+  },
+  {
+    "name": "step:search",
+    "span_id": "57e88a300089b060",
+    "parent": "5d73f8be4d1d7950",
+    "ms": 76.9,
+    "attributes": {
+      "attempts_allowed": 3,
+      "tries": 3,
+      "outcome": "fallback",
+      "used_fallback": true,
+      "elapsed_s": 0.0769,
+      "error": "ToolTimeout: search timed out"
+    },
+    "events": [
+      {
+        "name": "backoff",
+        "attributes": {
+          "seconds": 0.0236,
+          "after_attempt": 1
+        }
+      },
+      {
+        "name": "backoff",
+        "attributes": {
+          "seconds": 0.0406,
+          "after_attempt": 2
+        }
+      }
+    ]
+  },
+  {
+    "name": "node:gather",
+    "span_id": "5d73f8be4d1d7950",
+    "parent": "f88aaca9366f48df",
+    "ms": 76.93,
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "attempt",
+    "span_id": "d9c7cf8f631d7d54",
+    "parent": "818d84faa39127d1",
+    "ms": 0.49,
+    "attributes": {
+      "n": 1,
+      "error.type": "ServerError",
+      "error.message": "fees returned 500 (flaky, first call)"
+    },
+    "events": [
+      {
+        "name": "exception",
+        "attributes": {
+          "exception.type": "faults.ServerError",
+          "exception.message": "fees returned 500 (flaky, first call)",
+          "exception.stacktrace": "Traceback (most recent call last):\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/.venv/lib/python3.14/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/retry.py\", line 139, in attempt\n    value = call(*args, **kwargs)\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/tools.py\", line 47, in fees\n    return plan.apply(\"fees\", dict(FEES.get(topic, {})))\n           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/reflowgang/ai-agents-project/labs/week08/starter/faults.py\", line 102, in apply\n    raise ServerError(f\"{tool} returned 500 (flaky, first call)\")\nfaults.ServerError: fees returned 500 (flaky, first call)\n",
+          "exception.escaped": "False"
+        }
+      }
+    ]
+  },
+  {
+    "name": "attempt",
+    "span_id": "49b56c7654f71738",
+    "parent": "818d84faa39127d1",
+    "ms": 0.03,
+    "attributes": {
+      "n": 2
+    },
+    "events": []
+  },
+  {
+    "name": "step:fees",
+    "span_id": "818d84faa39127d1",
+    "parent": "cc561a8678e6d5c4",
+    "ms": 19.52,
+    "attributes": {
+      "attempts_allowed": 3,
+      "tries": 2,
+      "outcome": "ok",
+      "used_fallback": false,
+      "elapsed_s": 0.0195
+    },
+    "events": [
+      {
+        "name": "backoff",
+        "attributes": {
+          "seconds": 0.0149,
+          "after_attempt": 1
+        }
+      }
+    ]
+  },
+  {
+    "name": "node:price",
+    "span_id": "cc561a8678e6d5c4",
+    "parent": "f88aaca9366f48df",
+    "ms": 19.56,
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "node:draft",
+    "span_id": "bcfdf4b0fcee5658",
+    "parent": "f88aaca9366f48df",
+    "ms": 0.02,
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "node:submit",
+    "span_id": "f8292ac5ffef097b",
+    "parent": "f88aaca9366f48df",
+    "ms": 0.05,
+    "attributes": {
+      "paused_at_gate": true
+    },
+    "events": []
+  },
+  {
+    "name": "pipeline.start",
+    "span_id": "f88aaca9366f48df",
+    "parent": "3ea53975e1594ad9",
+    "ms": 107.22,
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "gate.decision",
+    "span_id": "fc13b411435369e3",
+    "parent": "3ea53975e1594ad9",
+    "ms": 0.01,
+    "attributes": {
+      "verdict": "approve",
+      "by": "a.muller",
+      "simulated": true,
+      "degraded": true,
+      "missing": "live handbook search (cached text used)"
+    },
+    "events": []
+  },
+  {
+    "name": "node:submit",
+    "span_id": "9db26cfe120879bf",
+    "parent": "b758f3c963a882ed",
+    "ms": 0.02,
+    "attributes": {},
+    "events": []
+  },
+  {
+    "name": "pipeline.resume",
+    "span_id": "b758f3c963a882ed",
+    "parent": "3ea53975e1594ad9",
+    "ms": 2.4,
+    "attributes": {
+      "verdict": "approve"
+    },
+    "events": []
+  },
+  {
+    "name": "case_run",
+    "span_id": "3ea53975e1594ad9",
+    "parent": null,
+    "ms": 114.06,
+    "attributes": {
+      "case_id": "RB-2026-0042",
+      "faults": "search:timeout@1.0,fees:flaky@1.0"
+    },
+    "events": []
+  }
+]

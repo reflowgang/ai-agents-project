@@ -667,7 +667,6 @@ tagged `injection`.
   cause; the first attempt at the defense experiment crashed because of it and
   the final run completed after the restart.
 
-
 # Week 5: a planner, an executor, and a second agent
 
 ---
@@ -947,7 +946,6 @@ nothing, but it does not do the job either.
 - The 768-booking comparison treats the existing `pricing.py:42` bug as
   correct behaviour.
 
-
 # Week 6: memory, a stateless MCP server, and an A2A channel
 
 ---
@@ -959,7 +957,6 @@ with `--pre`) | specification revision: 2026-07-28 | model: qwen2.5:7b via
 Ollama, served locally | framework for the A/B: Pydantic AI 2.55.0 |
 temperature: not verified, it is set inside `project.models` | date:
 2026-10-21 | A/B: 3 runs per condition | homework run on 2026-10-20
-
 
 ### 1. The handle
 
@@ -1216,9 +1213,6 @@ fallback are both inside `MemoryStore.search`, so week 7 replaces one body.
 - Running `02_stateless.py` with both servers in session mode (the "if you
   finish early" exercise): not done on my machine.
 
-
-
-
 # Week 7: a RAG pipeline you can score
 
 ---
@@ -1406,3 +1400,88 @@ assumption that keyword search rescues rare tokens, which my scorer does not do.
   run.
 - The corpus is synthetic; no number or deadline in it is a fact about
   Luxembourg.
+
+# Week 8: retries, recovery, and a human approval gate
+
+---
+
+## Week 8
+
+**Run conditions.** fault seed: 42 | attempts: 3 | base delay: 0.05 s in the graph nodes (0.02 s in the `01_survive.py` matrix) | max elapsed: 3.0 s | LangGraph <VERSION></version> | date: 2026-11-03 | lab runs: tools offline, no model | application runs: qwen3:4b-instruct (extractor), nomic-embed-text, Ollama served locally | every number below is from my own runs, one run each
+
+### 1. Which errors are retryable
+
+Retryable: `ToolTimeout`, `RateLimited`, `ServerError`. In each of these the call did not complete, and a later call may.
+
+Deliberately NOT retryable: `ContractDrift`, because the call succeeded and the response was valid, with `fee_eur` renamed to `amount_eur`. Retrying it returns the same valid, unusable answer as fast as the network allows, so it only costs time. I also made my own `EmptyResult` (a call that succeeded and returned nothing) non-retryable for the same reason, and any exception the ladder does not recognise is not caught at all, so a bug in my code crashes instead of showing up as a "degraded" answer.
+
+Evidence: on the `drift` row the fees step reports one attempt (`degraded x1`), not three. The two caps work: with a timeout fault on every call, 5 attempts allowed and a 0.1 s base delay without jitter, a 0.05 s elapsed cap stopped after 1 try, a 1.0 s cap after 4 tries (0.72 s), and a 10 s cap ran all 5 (1.52 s).
+
+Not tested: a 401 (not in this lab). It would sit on the non-retryable side for the same reason.
+
+### 2. The fault matrix
+
+|          | correct | WRONG | degraded | failed |
+| -------- | ------- | ----- | -------- | ------ |
+| baseline | 1       | 0     | 2        | 5      |
+| hardened | 2       | 0     | 5        | 1      |
+
+What hardening actually bought: not more correct answers (1 to 2, and the extra one is `flaky`, which one retry fixes). It took the failed column from 5 to 1: `timeout`, `rate_limit` and `server_error` became degraded answers that say what is missing, and `flaky` became a correct one. WRONG is 0 in both rows, and it cannot be anything else with this fault set: no fault changes the fee value, they only break its shape, so this scorer has no way to produce a confidently wrong number. The WRONG column is therefore not evidence that the pipeline never answers wrongly.
+
+The one remaining failure is `empty`. `01_survive.py` does not pass a validator for the search call, so the matrix does not exercise my empty-result rule (entry 3). The graph nodes do, see `03_graph_faults.py`.
+
+### 3. The empty result
+
+An empty result is not an error. My pipeline treats it as "the primary search does not cover this": it is not retried (the same question gets the same nothing), but it goes to the fallback search, one cheap extra call. If the fallback is empty too, the step degrades, and the draft says so in the text: "I could not retrieve anything about library card. Incomplete answer. Missing: handbook text, the fee." The same applies to an empty fee lookup, with no fallback.
+
+It is a decision because the other defensible choice is to treat an empty result as a plain success and answer from what is there, which here would be nothing. I chose to call the fallback because the primary being broken and returning an empty list is indistinguishable from the primary not knowing; the cost is one extra call on topics nobody covers (observed: both empty for "library card", answer degraded).
+
+When the fallback does answer, the run is marked degraded too and the text names it ("live handbook search (cached text used)"), because the cached text is a worse source.
+
+### 4. The gate
+
+Gated step: `submit`, the only step that is irreversible and visible outside the system. `gather` and `price` only read, and `draft` is a function of the state with no side effect, so a wrong result in any of them costs a retry or a rejected draft, not a submitted case. Gating them would add approvals without adding protection and would train the approver to click through.
+
+The approval payload carries the exact arguments, the evidence passages, the `degraded` flag and the list of what is missing. It deliberately carries no text written by a model, because the model whose output is being checked would also be writing the account of it.
+
+Reject and edit both work (lab runs, two separate processes each time): `edit` with fee 55.0 submitted the edited fee, and the record keeps both the edited and the original arguments (`55.0` and `60.0`), the verdict, the identity and the event list. `reject` submitted nothing and left no side effect.
+
+An unanswered approval after the timeout: nothing is submitted, and the verdict is "timeout". That protects the resident, whose case would otherwise go out unreviewed, and the commune, which would carry an unchecked submission. It is implemented in the application (entry 6) with a default of 120 seconds, which is my choice, not a measured value.
+
+### 5. The duplicate the state does not show
+
+I used the course's `interrupt_smoke_test.py`, not my own pipeline. The side effect above the interrupt executed 2 times (the line appeared once in the `start` process and once in the `resume` process). The recorded state showed `WROTE_ABOVE_INTERRUPT` 1 time, and the script's own duplicate check printed "none".
+
+What that means for anything my gated node does before it asks: above `interrupt()` the node may only read. Any write belongs after it, because the first execution's return value is thrown away while its effect on the outside world is not. The gate node in `app/graph.py` writes nothing at all; the submission happens in `pipeline.py` after the verdict, and the decision record is appended after the resume.
+
+### 6. Wired into the application
+
+`python -m app.run --stages` now shows retry and gate as built (8 stages built, vision and checks are the week 9 stubs).
+
+**Retry.** `app/retry.py` is the lab ladder plus the real-world versions of the three retryable faults: connection and timeout errors from the standard library, `openai`, `requests` and `httpx`, and the openai rate-limit and 5xx errors. HTTP errors in general (401, 404) are deliberately not retried. The pipeline's two policies are the skeleton's: search 3 attempts, 3.0 s cap, degrade; agent 2 attempts, 60 s cap, degrade. With a 60 s cap, an agent call that fails after a long wait is not retried, which is intended (a second wait of the same length is not a recovery). Not wrapped: the extractor, the router's classify call and the specialist call. An error there ends the run as outcome "error", and the trace is still written. Not tested against a real Ollama outage.
+
+**Gate.** `app/graph.py` runs a one-node LangGraph with an `interrupt` and a SQLite checkpoint, asks on the terminal (approve, edit one field, reject), and resumes the graph with the answer.
+
+- Attended, approved: the extractor found a request (category access, urgency urgent), I typed approve, and the outcome was ok ("Logged a access request"). The approval step took 9695.4 ms, which is my typing time.
+- Attended, no answer: with `APP_GATE_TIMEOUT=5` the prompt expired, the answer was "Not submitted: the approval gate answered timeout (no answer)", outcome blocked, and the approval step took 5114.2 ms.
+- Unattended (`--unattended`): the approval step took 1.8 ms, the answer was "timeout (unattended)", outcome blocked. A full `--batch` (58 gold cases) was not run.
+- Every decision is appended to `artifacts/app_approvals.jsonl` with the verdict, the identity, and the original and final arguments. Both of my two attended runs are in it (approve, then timeout with `final_arguments: null`).
+
+Consequence for week 10: every case that takes the request route will end "blocked" in a batch run, by design, because nobody is there to approve it. A harness that counts "blocked" as a failure would be scoring the safety decision as a defect.
+
+### 7. Homework
+
+- **Timeout proved:** the `APP_GATE_TIMEOUT=5` run above.
+- **One trace with a retry, a fallback and the gate** (`04_otel_trace.py`, OpenTelemetry spans, faults `search:timeout@1.0,fees:flaky@1.0`, seed 42): `step:search` made 3 attempts, all `ToolTimeout`, with two backoffs between them, and then the `fallback` span answered; `step:fees` failed once with a `ServerError` and succeeded on attempt 2; the run paused at `node:submit`, `gate.decision` recorded approve, and `pipeline.resume` finished it. Three checks in the script print yes. Two limits: the approver in this script is simulated by the script itself (`simulated=True` on its span), and this is the lab pipeline with injected faults, not the application, because a fallback on the real model cannot be forced on demand. The whole trace took 114.1 ms; the spans are real, the durations are tiny because the lab tools are offline.
+- **`python -m project.verify` passes:** 351 records in `traces.jsonl`, "All artifacts match the contract".
+
+### Deferred
+
+- The approval payload's `evidence` in the application includes three corpus passages that have nothing to do with the request (observed on the badge reader request: civil status, residence certificate, parking vignette). Memory search always returns its top 3 and has no relevance threshold, so the approver reads noise. Not fixed.
+- A full `--batch` run was not done (58 cases, one to two minutes each on this machine, an estimate).
+- Retry in the application was not exercised with a real Ollama outage.
+- The extractor, router and specialist calls are not wrapped in a retry policy.
+- A duplicate side effect proved on my own pipeline: only the course's smoke test was run.
+- What my fault harness cannot simulate: a fault that changes a value (so WRONG cannot occur), judgment and goal failures, failures that are correlated between tools (each tool is faulted independently), and a per-call deadline (`slow` just takes 0.4 s and counts as success).
+- The matrix does not validate the search call, so its `malformed` and `empty` rows for search are not a test of my validation; `03_graph_faults.py` is.
+- One run of each experiment; the fault outcomes are deterministic for seed 42, the timings are not.
